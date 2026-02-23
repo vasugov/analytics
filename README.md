@@ -18,8 +18,3 @@
 3. **Metrics Computation Layer**: Computes advanced analytics using vectorized operations (NumPy, pandas, Numba).  
 4. **WebSocket / Frontend Layer**: Pushes live metrics to dashboards (React.js, D3.js, FastAPI/WebSockets).  
 5. **Persistence Layer**: Logs events and stores metrics for replay and analysis (PostgreSQL, MongoDB, S3).
-
-## Getting Started
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/nfl-analytics-engine.git
