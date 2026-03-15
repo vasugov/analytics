@@ -1,0 +1,53 @@
+NFL Analytics Framework - Project Description
+
+Project Overview:
+This project is a research-oriented analytics framework for football metrics using historical play-by-play data. It is currently implemented using the R package nflfastR for data ingestion and analysis. The project is designed as a prototype for a real-time NFL analytics system, although live streaming is not yet implemented.
+
+Goals:
+
+* Build metric computation pipelines for football games
+* Validate statistical and probabilistic models (EPA, success rate, win probability)
+* Explore scalable event-driven architecture for future real-time usage
+* Produce actionable insights for teams, analysts, or research purposes
+
+Current Features:
+
+1. Advanced Metric Computation:
+
+   * Expected Points Added (EPA)
+   * Success Rate
+   * Red Zone Efficiency
+   * Drive-Level Efficiency
+   * Win Probability (WP)
+2. Historical Data Pipeline:
+
+   * Sequential processing of nflfastR play-by-play datasets
+   * Maintains simulated game state
+   * Computes metrics after each play
+3. Prototype Analytics Engine:
+
+   * Event-driven simulation on historical data
+   * In-memory game state management
+   * Sequential metric updates to mimic real-time processing
+
+Future Plans:
+
+* Real-Time Data Ingestion with streaming play-by-play events
+* Live metric updates via WebSockets and dashboards
+* Persistent storage of metrics and events for replay, analysis, and backtesting
+* Scalability for multiple simultaneous games
+* Incorporation of more advanced machine learning models for predictive analysis
+
+Use Cases:
+
+* Team strategy optimization
+* Coaching decision evaluation
+* Player and personnel analysis
+* Sports analytics research
+* Simulation of potential game outcomes and win probability scenarios
+
+Research Focus:
+
+* Intersection of sports analytics, distributed systems, statistical modeling, and real-time data processing
+* Building infrastructure that can scale to live analytics pipelines
+* Providing a foundation for turning historical analytics into actionable insights
