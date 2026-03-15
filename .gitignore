@@ -1,0 +1,30 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# Data (large files)
+data/raw/*.csv
+data/raw/*.rds
+data/raw/*.parquet
+data/processed/*.csv
+data/processed/*.rds
+data/processed/*.parquet
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store

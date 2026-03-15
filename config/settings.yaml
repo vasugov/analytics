@@ -1,0 +1,28 @@
+# settings.yaml
+# Central configuration for the NFL Analytics pipeline.
+
+pipeline:
+  seasons: [2021, 2022, 2023]
+  season_type: "REG"   # REG | POST | ALL
+
+paths:
+  raw:       data/raw
+  processed: data/processed
+  outputs:   data/outputs
+
+metrics:
+  enabled:
+    - epa
+    - success_rate
+    - win_probability
+    - redzone_efficiency
+    - drive_efficiency
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+# Future: streaming config
+# streaming:
+#   provider: "nfl_api"
+#   websocket_port: 8001
