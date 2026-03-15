@@ -1,5 +1,7 @@
 # NFL Analytics Framework (Research Prototype)
 
+[![Launch in Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/vasugov/analytics/main?labpath=notebooks%2Flooks%2Fmetrics1.ipynb)
+
 A research-oriented analytics framework for computing advanced football
 metrics from play-by-play data. The system processes historical game
 events and computes metrics such as Expected Points Added (EPA) and Win
@@ -127,5 +129,40 @@ This project sits at the intersection of:
 -   statistical modeling
 -   real-time data processing
 
-TEST COMMIT
+------------------------------------------------------------------------
+
+# Usage
+
+## Run in the browser (no setup required)
+
+Click the **Launch in Binder** badge above. Binder will build the environment
+and open the metrics notebook directly in your browser. No installs needed.
+
+Once open, click **Run All** (or Shift+Enter through each cell) to generate
+all charts.
+
+## Run locally
+
+**Requirements:** R, Python 3.x
+
+1. Clone the repo
+
+        git clone https://github.com/vasugov/analytics.git
+        cd analytics
+
+2. Install R packages (one-time)
+
+        Rscript -e "install.packages(c('nflfastR', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
+
+3. Run the R pipeline to generate metric CSVs
+
+        Rscript R/pipeline/run_pipeline.R
+
+4. Install Python dependencies
+
+        pip install -r requirements.txt
+
+5. Open the notebook
+
+        python -m jupyter notebook notebooks/looks/metrics1.ipynb
 
