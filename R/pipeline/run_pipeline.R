@@ -30,4 +30,4 @@ save_output(wpa_df,   "wpa_by_team.csv")
 save_output(rz_df,    "redzone_efficiency.csv")
 save_output(drive_df, "drive_efficiency.csv")
 
-message("Pipeline complete.")
+message("Complete")
