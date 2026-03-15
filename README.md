@@ -127,7 +127,5 @@ This project sits at the intersection of:
 -   statistical modeling
 -   real-time data processing
 
-It is intended as both:
+TEST COMMIT
 
--   a **technical systems project**
--   a **sports analytics research platform**
