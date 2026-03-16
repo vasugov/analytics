@@ -1,10 +1,8 @@
-# success_rate.R
-# Success rate metric: a play is successful if EPA > 0.
+#success_rate.r
+#binary success metric: a play is counted successful when epa > 0
 
-#' Compute success rate by team and season
-#'
-#' @param pbp Play-by-play tibble from nflfastR
-#' @return A tibble with success rate by posteam
+#param pbp: play-by-play tibble from nflfastr
+#returns tibble with plays and success_rate grouped by season and posteam
 compute_success_rate <- function(pbp) {
   pbp |>
     dplyr::filter(!is.na(epa), play_type %in% c("pass", "run")) |>

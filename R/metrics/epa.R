@@ -1,10 +1,8 @@
-# epa.R
-# Expected Points Added (EPA) metric computation.
+#epa.r
+#computes expected points added (epa) per play aggregated by team and season
 
-#' Compute per-play EPA summary by team and season
-#'
-#' @param pbp Play-by-play tibble from nflfastR
-#' @return A tibble with EPA per play by posteam
+#param pbp: play-by-play tibble from nflfastr
+#returns tibble with plays, total_epa, and epa_per_play grouped by season and posteam
 compute_epa <- function(pbp) {
   pbp |>
     dplyr::filter(!is.na(epa), play_type %in% c("pass", "run")) |>

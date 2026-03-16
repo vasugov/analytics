@@ -1,10 +1,8 @@
-# drive_efficiency.R
-# Drive-level efficiency metrics.
+#drive_efficiency.r
+#two-pass aggregation: first collapses to drive level, then rolls up to team/season
 
-#' Compute drive-level efficiency by team and season
-#'
-#' @param pbp Play-by-play tibble from nflfastR
-#' @return A tibble summarising drive outcomes by posteam
+#param pbp: play-by-play tibble from nflfastr
+#returns tibble with drives, td_drives, scoring_rate, and avg_drive_epa by season and posteam
 compute_drive_efficiency <- function(pbp) {
   pbp |>
     dplyr::filter(!is.na(drive), !is.na(fixed_drive_result)) |>

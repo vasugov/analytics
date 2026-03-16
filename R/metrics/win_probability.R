@@ -1,10 +1,8 @@
-# win_probability.R
-# Win probability (WP) metric computation.
+#win_probability.r
+#aggregates win probability added (wpa) from nflfastr's pre-computed wpa column
 
-#' Compute average win probability added (WPA) by team and season
-#'
-#' @param pbp Play-by-play tibble from nflfastR
-#' @return A tibble with total WPA by posteam
+#param pbp: play-by-play tibble from nflfastr
+#returns tibble with total_wpa and avg_wpa grouped by season and posteam
 compute_wpa <- function(pbp) {
   pbp |>
     dplyr::filter(!is.na(wpa)) |>
