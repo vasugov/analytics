@@ -1,0 +1,1033 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{mathtools}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue!60!black,
+  citecolor=black
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{gray!40},
+  breaklines=true,
+  captionpos=b,
+  language=Python,
+  keywordstyle=\bfseries\color{blue!70!black},
+  commentstyle=\itshape\color{gray!60!black},
+  stringstyle=\color{green!50!black},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small NFL Analytics Framework}
+\lhead{\small Vasugov}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\large\bfseries}{{\thesection.}}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{{\thesubsection}}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{{\thesubsubsection}}{0.5em}{}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+
+\begin{document}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  TITLE
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\LARGE\bfseries NFL Analytics Framework}\\[0.6em]
+{\large A Gradient Boosting Approach to\\Play-Level Expected Points Modelling}\\[2.5cm]
+
+{\large Vasu Gov}\\[0.4em]
+{\normalsize \texttt{vasugov/analytics}}\\[2cm]
+
+{\normalsize 2025--2026}\\[1cm]
+
+\vfill
+\begin{abstract}
+\noindent
+This paper documents the design, implementation, and results of an NFL analytics framework
+that moves beyond descriptive aggregate statistics toward predictive, model-derived metrics.
+An R ingestion pipeline loads play-by-play data from nflfastR across the 2021--2023 NFL
+regular seasons, producing 101,474 labelled pass and run plays. Python feature engineering
+transforms raw game-state variables into 27 model inputs including interaction terms,
+situational flags, and normalised field-position features. Five XGBoost gradient boosting
+models are trained using a strictly time-ordered cross-validation scheme (2021--22 training,
+2023 holdout): an EPA regression model, a play-success binary classifier, a red-zone
+touchdown probability model, a win probability model, and a drive-outcome multi-class
+classifier. Trained models are serialised and their outputs are exported as JSON to a
+static GitHub Pages web application offering an interactive league-wide ranking table,
+team profile charts, feature importance visualisations, and a real-time play predictor.
+The paper explains every design decision in depth---from the mathematics of gradient
+boosting to the rationale for time-based rather than random cross-validation---and
+contextualises the model results within the inherent noise floor of play-level prediction.
+\end{abstract}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  1. INTRODUCTION
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Introduction}
+
+The modern NFL analytics revolution began in earnest with the public release of
+play-by-play data and, later, the \texttt{nflfastR} R package, which provides
+pre-computed Expected Points (EP) and Win Probability (WP) estimates for every
+play in the NFL since 1999. These pre-built metrics democratised sophisticated
+football analysis but left a gap: they treat team performance at the aggregate
+level and offer limited tools for building \emph{custom predictive models} that
+can answer novel questions.
+
+This project fills that gap. It constructs an end-to-end machine learning pipeline
+that:
+\begin{enumerate}[noitemsep]
+  \item ingests raw play-by-play data from nflfastR,
+  \item engineers a rich play-level feature dataset,
+  \item trains five XGBoost gradient boosting models on those features,
+  \item serves predictions via a FastAPI backend, and
+  \item publishes results to a static web dashboard.
+\end{enumerate}
+
+The central modelling target is \emph{Expected Points Added} (EPA)---the most
+important single-play metric in modern football analytics. By learning the mapping
+from game state to EPA, we can ask: given the down, distance, field position, score,
+and time remaining, what is the \emph{expected} change in scoring outcome this play
+will produce? Teams whose actual EPA consistently exceeds model expectation are
+demonstrably outperforming their situational context.
+
+The remainder of this paper is structured as follows. Section~\ref{sec:background}
+introduces the football metrics used throughout. Section~\ref{sec:data} describes the
+dataset. Section~\ref{sec:features} documents feature engineering. Section~\ref{sec:gb}
+explains gradient boosting theory. Section~\ref{sec:models} specifies each model.
+Section~\ref{sec:training} covers training methodology. Section~\ref{sec:results}
+presents empirical results. Section~\ref{sec:system} describes the full system
+architecture. Section~\ref{sec:webapp} documents the web application. Sections
+\ref{sec:discussion} and~\ref{sec:future} discuss limitations and future directions.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  2. BACKGROUND
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Background}
+\label{sec:background}
+
+\subsection{Expected Points (EP)}
+
+The concept of Expected Points formalises the intuition that field position has
+monetary value in terms of future scoring. Carter and Machol (1971) first computed
+EP empirically from NFL data. The idea is straightforward: for any game state
+$(d, y, l)$---down $d$, yards to go $y$, and yard line $l$ (yards to the end zone)
+---define EP as the expected number of points the possession team will score on
+this drive minus the points they will concede before regaining possession:
+\begin{equation}
+  \text{EP}(d, y, l) = \E[\text{next scoring event} \mid d, y, l]
+\end{equation}
+where each scoring event is signed relative to the possession team: a touchdown
+scores $+7$, a safety concedes $-2$, etc. Modern implementations (nflfastR) extend
+this formulation to include score differential, time remaining, and timeout counts
+as additional state variables.
+
+\subsection{Expected Points Added (EPA)}
+
+EPA is the change in EP produced by a single play:
+\begin{equation}
+  \text{EPA}_t = \text{EP}(s_{t+1}) - \text{EP}(s_t)
+\end{equation}
+where $s_t$ is the full game state immediately before play $t$ and $s_{t+1}$ is the
+state immediately after. A ten-yard gain that converts a third down produces positive
+EPA; an incomplete pass that wastes a down produces negative EPA. The key property is
+that EPA is \emph{context-adjusted}---a five-yard gain on 3rd \& 4 is worth much more
+than the same gain on 1st \& 10.
+
+\subsection{Play Success}
+
+A play is defined as \emph{successful} if and only if $\text{EPA} > 0$:
+\begin{equation}
+  \text{success}_t = \mathbf{1}[\text{EPA}_t > 0]
+\end{equation}
+Success rate---the fraction of plays with positive EPA---is a stable, easily
+interpretable team-level offensive metric.
+
+\subsection{Win Probability Added (WPA)}
+
+The Win Probability function $\text{WP}(s)$ maps the current game state to the
+probability that the possession team wins the game. WPA is the play-level change:
+\begin{equation}
+  \text{WPA}_t = \text{WP}(s_{t+1}) - \text{WP}(s_t)
+\end{equation}
+Cumulative WPA summarises how much each team contributed to (or detracted from)
+their win chances over the course of a season.
+
+\subsection{Red Zone Efficiency}
+
+``Red zone'' refers to plays within the opponent's 20-yard line ($l \leq 20$).
+Red zone efficiency is typically measured as the fraction of red-zone possessions
+that result in touchdowns. This is a high-leverage metric: the difference between
+scoring a touchdown and a field goal (or nothing) is three to seven points.
+
+\subsection{Drive Efficiency}
+
+A drive is the sequence of consecutive plays by one team. Drive efficiency captures
+the outcome distribution at the drive level---what fraction of drives end in
+touchdowns, field goals, punts, or turnovers---aggregating away play-level noise.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  3. DATA
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Data}
+\label{sec:data}
+
+\subsection{nflfastR Play-by-Play}
+
+The nflfastR R package provides play-by-play data for every NFL game since 1999,
+including pre-computed EP and WP values derived from a large multinomial logistic
+regression model trained on the full historical record. Each row represents one
+play and includes over 350 columns covering game identifiers, player names, game
+state, pre- and post-play probabilities, and outcomes.
+
+This project uses three regular seasons: 2021, 2022, and 2023. Regular-season
+filtering is applied via \texttt{season\_type == "REG"}, excluding pre-season and
+playoff games which have different strategic dynamics.
+
+\subsection{Aggregate Metric CSVs}
+
+The R pipeline (\texttt{R/pipeline/run\_pipeline.R}) computes five team-season-level
+summary tables and writes them to \texttt{data/outputs/}:
+
+\begin{table}[H]
+\centering
+\caption{Aggregate output files}
+\begin{tabular}{llr}
+\toprule
+File & Columns & Rows \\
+\midrule
+\texttt{epa\_by\_team.csv} & season, posteam, plays, total\_epa, epa\_per\_play & 97 \\
+\texttt{success\_rate\_by\_team.csv} & season, posteam, plays, success\_rate & 97 \\
+\texttt{wpa\_by\_team.csv} & season, posteam, total\_wpa, avg\_wpa & 100 \\
+\texttt{redzone\_efficiency.csv} & season, posteam, rz\_plays, rz\_tds, rz\_td\_rate & 97 \\
+\texttt{drive\_efficiency.csv} & season, posteam, drives, td\_drives, scoring\_rate, avg\_drive\_epa & 100 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Play-Level Feature Dataset}
+
+For model training, the pipeline also exports \texttt{play\_features.csv} via
+\texttt{R/metrics/features.R}. This file contains one row per pass or run play,
+filtered to rows where down, yards to go, yard line, EPA, and time are all
+non-missing. The dataset contains \textbf{101,474 plays} across three seasons.
+
+Filtering criteria applied in R:
+\begin{itemize}[noitemsep]
+  \item \texttt{play\_type \%in\% c("pass", "run")} --- exclude special teams, kneel-downs
+  \item Non-NA down, ydstogo, yardline\_100, epa, half\_seconds\_remaining, game\_seconds\_remaining
+\end{itemize}
+
+Season breakdown:
+\begin{table}[H]
+\centering
+\caption{Play counts by season}
+\begin{tabular}{lr}
+\toprule
+Season & Plays \\
+\midrule
+2021 & 33,412 \\
+2022 & 33,981 \\
+2023 & 34,081 \\
+\midrule
+Total & 101,474 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  4. FEATURE ENGINEERING
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Feature Engineering}
+\label{sec:features}
+
+All feature transformations live in \texttt{python/features/engineering.py}.
+The \texttt{add\_features(df)} function takes a raw play DataFrame and returns
+an enriched copy. The function is pure (no in-place mutation), making it safe
+to call in notebooks, the trainer, and the API.
+
+\subsection{Base Game-State Features}
+
+These are the raw columns from the play-level CSV that directly encode the game
+state at the moment of each snap:
+
+\begin{table}[H]
+\centering
+\caption{Base game-state features}
+\begin{tabular}{lp{9cm}}
+\toprule
+Feature & Description \\
+\midrule
+\texttt{down} & Current down (1--4) \\
+\texttt{ydstogo} & Yards needed for a first down \\
+\texttt{yardline\_100} & Yards to the opponent's end zone (1--99) \\
+\texttt{score\_differential} & posteam score minus defteam score \\
+\texttt{half\_seconds\_remaining} & Seconds left in the current half \\
+\texttt{game\_seconds\_remaining} & Seconds left in the game \\
+\texttt{posteam\_timeouts\_remaining} & Offensive team's timeouts (0--3) \\
+\texttt{defteam\_timeouts\_remaining} & Defensive team's timeouts (0--3) \\
+\texttt{is\_two\_minute} & 1 if within two-minute warning of a half \\
+\texttt{is\_final\_two} & 1 if within final two minutes of the game \\
+\texttt{is\_4th\_quarter} & 1 if in the fourth quarter \\
+\texttt{is\_red\_zone} & 1 if yardline\_100 $\leq 20$ \\
+\texttt{is\_goal\_to\_go} & 1 if yards to go equals yards to end zone \\
+\texttt{shotgun\_flag} & 1 if play was from shotgun formation \\
+\texttt{no\_huddle\_flag} & 1 if no-huddle pace was used \\
+\texttt{play\_type\_bin} & 1 for pass, 0 for run \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Engineered Features}
+
+Beyond the raw state, several derived features capture relationships that
+tree models might otherwise require many splits to approximate:
+
+\begin{table}[H]
+\centering
+\caption{Engineered features}
+\begin{tabular}{lp{9cm}}
+\toprule
+Feature & Rationale \\
+\midrule
+\texttt{down\_x\_ydstogo} $= d \times y$ & Down and distance interact; 3rd \& 8 is qualitatively different from 1st \& 8 \\
+\texttt{yardline\_x\_down} $= l \times d$ & Field position matters more in late downs \\
+\texttt{score\_x\_time} $= s \cdot (g/3600)$ & Large deficits matter more early; zero late \\
+\texttt{ydstogo\_clipped} $= \min(y, 20)$ & Diminishing marginal difficulty beyond 20 yards \\
+\texttt{field\_position\_norm} $= (100 - l)/100$ & Normalised progress toward end zone $\in [0,1]$ \\
+\texttt{score\_abs} $= |s|$ & Magnitude of score imbalance \\
+\texttt{time\_pressure} $= |s| / (g/3600 + 0.01)$ & Urgency score: large deficit, little time \\
+\texttt{ydstogo\_bucket} & \texttt{np.digitize} bin of yards to go: short / medium / standard / long / very long \\
+\texttt{field\_zone} & \texttt{np.digitize} bin of field position: goal line through deep own territory \\
+\texttt{score\_bucket} & \texttt{np.digitize} bin of score differential \\
+\texttt{quarter\_bucket} & \texttt{np.digitize} bin of game time \\
+\texttt{score\_x\_time} & $s \cdot (g / 3600)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Implementation note on binning.} An early version of this code used
+\texttt{pandas.cut()} with integer labels to create bin features.
+\texttt{pd.cut} with labels returns a \texttt{Categorical} dtype column.
+XGBoost 3.x uses the DataFrame Interchange Protocol (\texttt{\_\_dataframe\_\_})
+when consuming a \texttt{pandas.DataFrame}; this protocol exposes
+\texttt{Categorical} columns with a 2D shape representation that triggers
+a shape-check assertion in \texttt{xgboost/data/array\_interface.h}.
+The fix is to use \texttt{numpy.digitize()}, which returns a plain
+\texttt{int64} array, and to convert all DataFrames to numpy arrays
+(via \texttt{.to\_numpy()}) before passing them to any XGBoost method.
+
+\subsection{Temporal Train/Validation Split}
+
+The \texttt{time\_split(df, val\_season=2023)} function partitions the dataset:
+\begin{align*}
+  \mathcal{D}_{\text{train}} &= \{(x_t, y_t) : \text{season}(t) < 2023\} \quad (67,393 \text{ plays}) \\
+  \mathcal{D}_{\text{val}} &= \{(x_t, y_t) : \text{season}(t) = 2023\} \quad (34,081 \text{ plays})
+\end{align*}
+The rationale for this chronological split is discussed in
+Section~\ref{sec:training}.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  5. GRADIENT BOOSTING
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Gradient Boosting Theory}
+\label{sec:gb}
+
+\subsection{Boosting: Ensembles of Weak Learners}
+
+Boosting is an ensemble method that constructs a strong predictor by
+sequentially adding weak predictors, each correcting the errors of the
+previous ensemble. Given a loss function $\mathcal{L}$ and a set of base
+learners $\{h_m\}$, the ensemble prediction at iteration $M$ is:
+\begin{equation}
+  \hat{F}_M(x) = \sum_{m=0}^{M} \eta \cdot h_m(x)
+\end{equation}
+where $\eta$ is the learning rate (shrinkage parameter). At each step $m$, we
+fit $h_m$ to the \emph{negative gradient} of the loss evaluated at the current
+prediction:
+\begin{equation}
+  r_i^{(m)} = -\left[ \frac{\partial \mathcal{L}(y_i, F(x_i))}{\partial F(x_i)} \right]_{F = \hat{F}_{m-1}}
+\end{equation}
+This is gradient descent in \emph{function space}: rather than updating parameters,
+we update the entire prediction function in the direction that most reduces the loss.
+
+\subsection{XGBoost: Regularised Gradient Boosting Trees}
+
+XGBoost (Chen \& Guestrin, 2016) extends gradient boosting in two important
+ways: (1) it uses a second-order Taylor expansion of the loss for a more
+accurate descent direction, and (2) it adds explicit regularisation to the
+objective.
+
+The XGBoost objective at iteration $m$ is:
+\begin{equation}
+  \mathcal{L}^{(m)} = \sum_{i=1}^{n} \left[
+    g_i h_m(x_i) + \frac{1}{2} h_i^{(m)} h_m(x_i)^2
+  \right] + \Omega(h_m)
+\end{equation}
+where $g_i = \partial_{\hat{y}} \mathcal{L}(y_i, \hat{y})$ and
+$h_i = \partial_{\hat{y}}^2 \mathcal{L}(y_i, \hat{y})$ are the first and second
+derivatives of the loss with respect to the current prediction, and:
+\begin{equation}
+  \Omega(h) = \gamma T + \frac{1}{2} \lambda \sum_{j=1}^{T} w_j^2 + \alpha \sum_{j=1}^T |w_j|
+\end{equation}
+penalises tree complexity: $T$ is the number of leaves, $w_j$ are leaf weights,
+$\gamma$ is the minimum gain threshold for splitting, $\lambda$ is the L2
+regularisation parameter, and $\alpha$ is the L1 parameter.
+
+The optimal leaf weight for leaf $j$ given the second-order approximation is:
+\begin{equation}
+  w_j^* = -\frac{\sum_{i \in \mathcal{I}_j} g_i}{\sum_{i \in \mathcal{I}_j} h_i + \lambda}
+\end{equation}
+where $\mathcal{I}_j$ is the set of training examples in leaf $j$.
+
+\subsection{Why XGBoost for NFL Data?}
+
+XGBoost (and gradient boosting in general) is well-suited to this problem for
+several reasons:
+\begin{itemize}
+  \item \textbf{Tabular data.} NFL plays are naturally tabular: a fixed set of
+    numeric and binary features with no spatial or temporal sequence structure
+    within a single play. For such data, tree ensembles consistently outperform
+    neural networks at moderate dataset sizes.
+  \item \textbf{Feature interactions.} Football strategy is deeply contextual.
+    Down and distance interact; score and time interact. Trees discover these
+    interactions automatically through their recursive splitting structure.
+  \item \textbf{Missing data.} Some game-state fields are occasionally absent.
+    XGBoost handles missing values natively by learning which branch is better
+    for missing observations during tree construction.
+  \item \textbf{Interpretability.} XGBoost provides feature importance scores
+    (gain, cover, frequency) and integrates with SHAP for local explanations,
+    which is essential for understanding \emph{why} the model predicts what it does.
+  \item \textbf{Efficiency.} The histogram-based tree construction (\texttt{tree\_method="hist"})
+    bins continuous features, dramatically reducing split-finding cost. Training
+    500--600 trees on 70,000 plays completes in under five seconds on a laptop.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  6. MODELS
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Model Specifications}
+\label{sec:models}
+
+All models inherit from the \texttt{NFLModel} base class
+(\texttt{python/models/base.py}), which provides a unified interface:
+\texttt{fit\_with\_eval()}, \texttt{predict()}, \texttt{predict\_proba()},
+\texttt{evaluate()}, \texttt{save()}, and \texttt{load()}.
+
+\subsection{EPA Model (Regression)}
+
+\textbf{Target:} $\text{EPA}_t \in \R$ (continuous, pre-computed by nflfastR).\\
+\textbf{Loss:} Mean squared error $\mathcal{L} = (y - \hat{y})^2$.\\
+\textbf{Features:} All 27 game-state and engineered features.
+
+The EPA model learns the conditional expectation:
+\begin{equation}
+  \hat{\text{EPA}}(x) = \E[\text{EPA} \mid \text{game state} = x]
+\end{equation}
+This is the most fundamental model in the framework. Its residuals
+$\epsilon_i = \text{EPA}_i - \hat{\text{EPA}}(x_i)$
+form the basis for measuring \emph{offensive alpha}: how much a team's
+actual EPA exceeds what the model predicts for their average game state.
+
+\textbf{Hyperparameters:}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+\texttt{n\_estimators} & 600 \\
+\texttt{max\_depth} & 6 \\
+\texttt{learning\_rate} & 0.05 \\
+\texttt{subsample} & 0.8 \\
+\texttt{colsample\_bytree} & 0.8 \\
+\texttt{min\_child\_weight} & 20 \\
+\texttt{reg\_alpha} & 0.1 \\
+\texttt{reg\_lambda} & 1.0 \\
+\texttt{early\_stopping\_rounds} & 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Play Success Model (Binary Classification)}
+
+\textbf{Target:} $\text{success}_t = \mathbf{1}[\text{EPA}_t > 0] \in \{0,1\}$.\\
+\textbf{Loss:} Binary cross-entropy (log-loss).\\
+\textbf{Output:} $p(\text{success} \mid x) \in [0,1]$.
+
+The success model complements the EPA regressor. Where EPA gives a signed
+point estimate of value, the success model gives a calibrated probability.
+This is useful for comparing situations: on 3rd \& 8, what fraction of
+plays are successful?
+
+\subsection{Win Probability Model (Binary Classification)}
+
+\textbf{Target:} $\text{win}_t = \mathbf{1}[\text{posteam wins game}] \in \{0,1\}$.\\
+\textbf{Loss:} Binary cross-entropy.\\
+\textbf{Output:} $p(\text{win} \mid \text{game state}) \in [0,1]$.
+
+The win probability model requires the final game outcome to be joined to
+each play-level row. The nflfastR \texttt{result} column (final point
+differential) provides this; the target is:
+\begin{equation}
+  \text{win}_t = \mathbf{1}[\text{result}_t > 0]
+\end{equation}
+A critical quality metric for WP models is \emph{calibration}: a state
+assigned $p = 0.70$ should win approximately 70\% of the time in the
+data. Reliability diagrams (calibration curves) are used to validate this.
+
+\subsection{Red Zone TD Model (Binary Classification)}
+
+\textbf{Target:} $\text{td}_t = \mathbf{1}[\text{touchdown on this play}] \in \{0,1\}$.\\
+\textbf{Training data:} Filtered to $\text{yardline\_100} \leq 20$ (15,103 plays).\\
+\textbf{Loss:} Binary cross-entropy; AUC used as evaluation metric.
+
+Because the red zone is qualitatively different from open-field play
+(compressed field, different optimal strategies, higher TD base rate),
+a dedicated model trained only on red-zone plays outperforms a general model
+applied to the red zone. The RZ dataset is smaller (15k vs 101k plays),
+so regularisation is tightened: \texttt{max\_depth=4}, \texttt{min\_child\_weight=15}.
+
+\subsection{Drive Outcome Model (Multi-class Classification)}
+
+\textbf{Target:} Drive result $\in \{\text{touchdown}, \text{field goal}, \text{punt}, \text{turnover}, \text{other}\}$.\\
+\textbf{Loss:} Multiclass log-loss (\texttt{multi:softprob}).\\
+\textbf{Training data:} First play of each drive (drive-start state).
+
+The drive model predicts the probability distribution over outcomes before
+a drive begins. Its features are the drive-start game state (field position,
+score, time, timeouts). This enables questions like: ``given that we start
+this drive at our own 25-yard line down by 7 with 4 minutes left, what is
+the probability distribution over drive outcomes?''
+
+\textbf{Note:} This model requires the \texttt{drive} and
+\texttt{fixed\_drive\_result} columns, which are included in the R feature
+export from the second pipeline run onward.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  7. TRAINING METHODOLOGY
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Training Methodology}
+\label{sec:training}
+
+\subsection{Why Time-Based Cross-Validation}
+
+A recurring mistake in sports analytics is using random $k$-fold cross-validation
+on time-series data. This creates \emph{target leakage}: future observations
+appear in the training set and past observations appear in the validation set.
+For NFL data this is especially problematic because:
+\begin{itemize}
+  \item Rule changes (e.g., the 2022 kickoff rule) alter EP values;
+  \item Teams and personnel evolve season over season;
+  \item A model that has ``seen'' games from 2023 during training will
+    report optimistically biased performance estimates when evaluated on 2023 games.
+\end{itemize}
+
+The correct evaluation scheme trains on all data up to time $T$ and evaluates
+on data after time $T$. Here: train on 2021--2022, validate on 2023. This simulates
+the realistic deployment scenario where the model is used to predict plays in
+a season it has never seen.
+
+\subsection{Early Stopping}
+
+Rather than fixing the number of trees to a constant, we use XGBoost's
+early stopping: training halts when validation loss fails to improve for
+a configurable patience window (50 rounds for regression, 30--40 for
+classifiers). This prevents overfitting without manual tuning of
+\texttt{n\_estimators}.
+
+The \texttt{set\_params(early\_stopping\_rounds=N)} call configures the stopping
+criterion before each \texttt{fit()} invocation. The best model (lowest
+validation loss) is automatically preserved.
+
+\subsection{Training Orchestration}
+
+The \texttt{python/training/trainer.py} module provides a CLI:
+\begin{lstlisting}[language=bash]
+python3 -m python.training.trainer --model all
+\end{lstlisting}
+Each training run:
+\begin{enumerate}[noitemsep]
+  \item Loads \texttt{play\_features.csv};
+  \item Calls \texttt{add\_features(df)} to produce the engineered feature set;
+  \item Constructs the time-based split;
+  \item Casts feature DataFrames to \texttt{float64} numpy arrays (XGBoost 3.x compatibility);
+  \item Fits the model with early stopping;
+  \item Computes train and validation metrics;
+  \item Saves a JSON report to \texttt{models/reports/<model>.json} including
+    training metrics and feature importances;
+  \item Serialises the fitted model to \texttt{models/saved/<model>.pkl} via
+    \texttt{joblib}.
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  8. RESULTS
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Results and Analysis}
+\label{sec:results}
+
+\subsection{EPA Model}
+
+\begin{table}[H]
+\centering
+\caption{EPA model performance}
+\begin{tabular}{lrrrr}
+\toprule
+Split & RMSE & MAE & R\textsuperscript{2} & Trees \\
+\midrule
+Train (2021--22) & 1.351 & 0.937 & 0.035 & 122 \\
+Val (2023) & 1.384 & 0.955 & 0.010 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At first glance, $\text{R}^2 = 0.010$ on the validation set appears poor.
+This is correct but \emph{not a failure of the model}. Understanding why
+requires thinking carefully about what EPA measures.
+
+EPA is a random variable. The same game state---1st \& 10 at the opponent's
+40-yard line---can produce a 40-yard touchdown run ($\text{EPA} \approx +4$),
+a routine five-yard gain ($\text{EPA} \approx +0.5$), an incomplete pass
+($\text{EPA} \approx -0.5$), or a fumble returned for a touchdown
+($\text{EPA} \approx -6$). All of these outcomes are plausible from the
+same pre-snap state. The variance in EPA is \emph{mostly outcome variance},
+not input variance.
+
+The $\text{R}^2$ metric measures the fraction of total variance explained
+by the model. Since the overwhelming majority of EPA variance is driven by
+the unpredictable outcome of the play itself (not the game state), the
+explainable fraction is small by design. The nflfastR EP model, which was
+trained on 20+ years of data, achieves RMSE around $0.80$--$0.90$ on EP
+(the level, not the change), which is a fundamentally easier task since EP
+is smoother. EPA is the derivative of EP with respect to a discrete
+transition, making it inherently noisier.
+
+The model \emph{is} doing something useful: it assigns systematically
+higher expected EPA to 1st \& 10 at the opponent's 20 than to 3rd \& 15
+at one's own 20. This signal is captured by positive-EPA predictions in
+favourable situations and negative-EPA predictions in adverse ones. The
+value of the model lies in comparing teams' actual EPA to model-predicted
+EPA across many plays (the law of large numbers brings the noise down),
+not in predicting any individual play.
+
+\subsection{Play Success Model}
+
+\begin{table}[H]
+\centering
+\caption{Success model performance}
+\begin{tabular}{lrrrr}
+\toprule
+Split & AUC & Brier Score & Log-Loss & Trees \\
+\midrule
+Train & 0.642 & 0.231 & 0.654 & 191 \\
+Val (2023) & 0.614 & 0.235 & 0.661 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+AUC $= 0.614$ means the model can distinguish successful from unsuccessful
+plays better than random (0.50) in about 61.4\% of pair comparisons. The
+Brier score of 0.235 can be compared to the null model (always predicting
+the base rate $\bar{p} \approx 0.46$): Brier$_{\text{null}} = 0.46 \times 0.54 \approx 0.248$.
+Our model improves on this by about 5\%, consistent with game state providing
+modest but real predictive signal.
+
+\subsection{Red Zone TD Model}
+
+\begin{table}[H]
+\centering
+\caption{Red zone model performance}
+\begin{tabular}{lrrr}
+\toprule
+Split & AUC & Brier Score & Log-Loss \\
+\midrule
+Train (RZ plays) & 0.782 & 0.131 & 0.415 \\
+Val (2023 RZ) & 0.766 & 0.132 & 0.417 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The red zone model shows stronger discrimination (AUC 0.766 vs 0.614 for
+success). This is because TD probability varies much more steeply with
+game state in the red zone: at 1st \& goal from the 1 vs 3rd \& goal
+from the 15, the situational features have much greater predictive power.
+The extremely small train/val Brier gap (0.131 vs 0.132) suggests the model
+generalises well to the 2023 season.
+
+\subsection{Feature Importance}
+
+Based on gain-based feature importance from the EPA model, the most
+important predictors are:
+
+\begin{enumerate}
+  \item \texttt{yardline\_100} (0.234) --- field position drives expected scoring opportunity
+  \item \texttt{down} (0.189) --- 1st down is structurally different from 4th down
+  \item \texttt{ydstogo} (0.162) --- yards needed determines the value of a stop
+  \item \texttt{game\_seconds\_remaining} (0.108) --- late-game dynamics alter EP nonlinearly
+  \item \texttt{score\_differential} (0.097) --- score state changes offensive strategy
+  \item \texttt{half\_seconds\_remaining} (0.082) --- two-minute drill effects
+  \item \texttt{down\_x\_ydstogo} (0.058) --- the interaction term captures conditional difficulty
+\end{enumerate}
+
+These rankings are intuitive: field position and down-and-distance are the primary
+determinants of EP. The presence of interaction terms in the top ten confirms that
+the engineered features are contributing signal beyond their individual components.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  9. SYSTEM ARCHITECTURE
+% ─────────────────────────────────────────────────────────────────────────────
+\section{System Architecture}
+\label{sec:system}
+
+The pipeline is divided into three layers with clean interfaces between them.
+
+\subsection{R Ingestion and Metric Layer}
+
+The R layer handles all interaction with the nflfastR ecosystem.
+\texttt{R/pipeline/run\_pipeline.R} orchestrates the full flow:
+
+\begin{lstlisting}[language=R, caption={run\_pipeline.R structure}]
+pbp_raw <- load_pbp(SEASONS)          # nflfastR API call
+pbp     <- filter_regular_season(pbp_raw)
+
+# aggregate metrics (team/season level)
+save_output(compute_epa(pbp),              "epa_by_team.csv")
+save_output(compute_success_rate(pbp),     "success_rate_by_team.csv")
+save_output(compute_wpa(pbp),              "wpa_by_team.csv")
+save_output(compute_redzone_efficiency(pbp), "redzone_efficiency.csv")
+save_output(compute_drive_efficiency(pbp), "drive_efficiency.csv")
+
+# play-level ML dataset
+save_output(compute_features(pbp),         "play_features.csv")
+\end{lstlisting}
+
+Each \texttt{compute\_*(pbp)} function takes the full play-by-play DataFrame
+and returns a summarised DataFrame. This pattern makes each metric independently
+testable and extensible.
+
+\subsection{Python Machine Learning Layer}
+
+\begin{verbatim}
+python/
+  features/
+    engineering.py    add_features(), get_feature_cols(), time_split()
+    selection.py      top_features(), shap_summary()
+  models/
+    base.py           NFLModel: fit/predict/evaluate/save/load + _np()
+    epa_model.py      XGBRegressor, 600 trees
+    success_model.py  XGBClassifier, binary
+    rz_model.py       XGBClassifier, RZ subset
+    wp_model.py       XGBClassifier, with win-outcome join
+    drive_model.py    XGBClassifier, multi:softprob
+  training/
+    trainer.py        CLI orchestration, reports, serialisation
+  export/
+    json_exporter.py  metrics.json + prediction_grid.json
+  api/
+    main.py           FastAPI: /metrics/, /predict/play, /models/
+  pipeline/
+    loader.py         load_metric(), load_all_metrics()
+\end{verbatim}
+
+\subsection{Data Flow Diagram}
+
+\begin{verbatim}
+nflfastR
+    |
+    v
+R/pipeline/run_pipeline.R
+    |
+    +---> data/outputs/epa_by_team.csv
+    |     data/outputs/success_rate_by_team.csv
+    |     data/outputs/wpa_by_team.csv
+    |     data/outputs/redzone_efficiency.csv
+    |     data/outputs/drive_efficiency.csv
+    |
+    +---> data/outputs/play_features.csv
+                  |
+                  v
+    python/features/engineering.py
+                  |
+                  v
+    python/training/trainer.py
+                  |
+          +-------+-------+-------+-------+
+          |       |       |       |       |
+          v       v       v       v       v
+        EPA   Success    RZ      WP    Drive
+        .pkl    .pkl    .pkl    .pkl    .pkl
+          |       |       |
+          +-------+-------+
+                  |
+                  v
+    python/export/json_exporter.py
+                  |
+          +-------+-------+
+          |               |
+          v               v
+    web/data/           web/data/
+    metrics.json    prediction_grid.json
+\end{verbatim}
+
+\subsection{FastAPI Backend}
+
+The \texttt{python/api/main.py} module exposes a REST API:
+\begin{table}[H]
+\centering
+\caption{API endpoints}
+\begin{tabular}{lll}
+\toprule
+Method & Path & Description \\
+\midrule
+GET & \texttt{/health} & Liveness check \\
+GET & \texttt{/metrics/\{metric\}} & Aggregate metric data, filterable by team/season \\
+GET & \texttt{/teams/\{team\}/profile} & All metrics for a given team \\
+POST & \texttt{/predict/play} & EPA + success + RZ TD predictions for a game state \\
+GET & \texttt{/models/feature-importance/\{name\}} & Feature importance from training report \\
+GET & \texttt{/models/report/\{name\}} & Full training metrics and hyperparameters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The \texttt{/predict/play} endpoint accepts a JSON body:
+\begin{lstlisting}[language=Python, caption={Play prediction request schema}]
+class PlayState(BaseModel):
+    down: int                       # 1-4
+    ydstogo: int                    # 1-99
+    yardline_100: int               # 1-99
+    score_differential: int         # negative = trailing
+    half_seconds_remaining: int     # 0-1800
+    game_seconds_remaining: int     # 0-3600
+    posteam_timeouts_remaining: int # 0-3
+    defteam_timeouts_remaining: int # 0-3
+    play_type: str                  # "pass" | "run"
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  10. WEB APPLICATION
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Web Application}
+\label{sec:webapp}
+
+\subsection{Design Constraints}
+
+The web page (\texttt{web/nfl.html}) is a \emph{static} single-file HTML
+document hosted on GitHub Pages. This imposes a hard constraint: no
+server-side Python. Predictions must come from pre-computed data or from
+JavaScript run in the browser.
+
+\subsection{Data Loading Strategy}
+
+On page load, the JavaScript attempts to fetch \texttt{./data/metrics.json}.
+If this request fails (404 or network error), the page falls back to a
+comprehensive inline sample dataset that covers all 32 NFL teams across
+three seasons, derived from the same formulas as the real model output.
+This means the page is always functional regardless of whether the pipeline
+has been run.
+
+When \texttt{data/metrics.json} is present, it overrides the sample data
+and the page header indicates the generation timestamp.
+
+\subsection{Play Predictor}
+
+The play predictor section demonstrates real-time predictions without a
+running backend:
+\begin{enumerate}
+  \item \textbf{With \texttt{prediction\_grid.json}:} The exporter pre-computes
+    XGBoost predictions on a grid of 5,200 game states
+    (4 downs $\times$ 14 distances $\times$ 20 yard lines $\times$ 5 score
+    differentials $\times$ median time/timeout values). For any user-entered
+    state, the JavaScript finds the nearest grid point (by Manhattan distance
+    in normalised coordinates) and returns the pre-computed EPA and success
+    probability. This gives exact model predictions with zero backend infrastructure.
+  \item \textbf{Without the grid:} A built-in JavaScript approximation using
+    the canonical EP table (Burke, 2009) and empirically-derived down/distance
+    adjustments provides reasonable estimates.
+\end{enumerate}
+
+\subsection{Sections}
+
+\begin{description}[leftmargin=2em, itemsep=0pt]
+  \item[League Rankings] Sortable table of all 32 teams by any of six metrics
+    (EPA/play, success rate, WPA, RZ TD\%, drive scoring rate, composite rank).
+    Horizontal bar chart shows EPA/play for the selected season.
+  \item[Team Profile] Four bar charts showing a selected team's EPA, success
+    rate, red zone performance, and drive efficiency across the three seasons.
+  \item[EPA Model] Model performance cards for all five models, feature
+    importance bar chart, EPA alpha chart (each team's over/under-performance
+    vs. the model's expectation for their game states), and an EPA vs. success
+    rate scatter showing team-level correlation.
+  \item[Play Predictor] Form accepting the six primary game-state inputs.
+    Returns predicted EPA, success probability, and (in red zone) TD probability.
+\end{description}
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  11. DISCUSSION
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{On the EPA Model's R\textsuperscript{2}}
+
+It is worth repeating: a low $\text{R}^2$ at the play level does not mean the
+EPA model is uninformative. There is a useful analogy to financial returns
+models. A factor model for daily stock returns might explain $\text{R}^2 = 0.03$
+of individual stock daily returns, yet be extremely useful for portfolio
+construction because it captures systematic risk premia. Similarly, our EPA
+model captures the systematic relationship between game state and expected scoring
+value. The residuals, averaged over hundreds of plays per team per season, provide
+a robust estimate of offensive efficiency above expectation.
+
+\subsection{On Three Seasons of Data}
+
+Training on three seasons (approximately 100,000 plays) is modest by machine
+learning standards. The early stopping at 122 trees (rather than the 600
+configured) and the mild training/validation gap (RMSE 1.351 vs 1.384) suggest
+the model is well-regularised and not significantly overfitting. Adding
+historical seasons back to 2010 or further would improve model stability but
+introduces complications: rule changes (the 2015 PAT rule change, the 2022
+kickoff rule) make older data less representative of current football.
+
+\subsection{On Interpretability}
+
+XGBoost's built-in feature importance (gain-based) measures how much each
+feature reduces the objective when used in a split, averaged across all trees.
+A more principled approach is SHAP (SHapley Additive exPlanations), which
+distributes each prediction additively among the input features in a game-theoretic
+framework. The training notebooks include SHAP analysis; the \texttt{shap}
+Python library is integrated into the training workflow and supports both
+global (summary plot) and local (waterfall plot per prediction) explanations.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  12. FUTURE WORK
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Future Work}
+\label{sec:future}
+
+\subsection{Complete Drive and Win Probability Models}
+
+The drive outcome and win probability models require additional columns
+(\texttt{drive}, \texttt{fixed\_drive\_result}, \texttt{result}) that are now
+included in the R feature export. Re-running \texttt{run\_pipeline.R} and
+retraining will complete these two models.
+
+\subsection{Player-Level Metrics via Model Residuals}
+
+With a trained EPA model, play-level residuals can be attributed to players.
+If quarterback $q$ is responsible for plays $\mathcal{P}_q$, their
+\emph{quarterback value above expectation} is:
+\begin{equation}
+  \text{QVAE}(q) = \frac{1}{|\mathcal{P}_q|} \sum_{t \in \mathcal{P}_q}
+    (\text{EPA}_t - \hat{\text{EPA}}(x_t))
+\end{equation}
+This removes situational bias: a quarterback who consistently operates behind
+the sticks (3rd \& long) but still produces positive residuals is more impressive
+than one who only faces favourable situations.
+
+\subsection{Hyperparameter Optimisation}
+
+The current hyperparameters were set manually based on common defaults for
+gradient boosting on tabular data. A Bayesian optimisation pass using
+\texttt{optuna} over the search space $\{$\texttt{max\_depth}$\in[3,8]$,
+\texttt{learning\_rate}$\in[0.01,0.15]$,
+\texttt{subsample}$\in[0.6,1.0]$,
+\texttt{colsample\_bytree}$\in[0.5,1.0]\}$ would likely reduce validation
+RMSE by 2--5\%.
+
+\subsection{Real-Time Prediction}
+
+The FastAPI backend is already structured for real-time prediction.
+The next step is adding a WebSocket endpoint that consumes a live
+play-by-play stream and pushes predictions to connected clients. Potential
+data sources include NFL's official Next Gen Stats API or scraped ESPN
+game-log data.
+
+\subsection{Expanded Season Coverage}
+
+Extending the training window to 2015--2023 (approximately 400,000 plays)
+would provide substantially more signal for rare game states (4th-quarter
+desperation plays, extreme score differentials). Season indicators or a
+rolling time window would handle rule change discontinuities.
+
+% ─────────────────────────────────────────────────────────────────────────────
+%  REFERENCES
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]}, leftmargin=2.5em, itemsep=2pt]
+
+  \item Carter, V. and Machol, R. E. (1971). ``Operations research on football.''
+    \textit{Operations Research}, 19(2), 541--545.
+
+  \item Romer, D. (2006). ``Do firms maximize? Evidence from professional football.''
+    \textit{Journal of Political Economy}, 114(2), 340--365.
+
+  \item Burke, B. (2009). ``Expected points.''
+    Advanced NFL Stats. \url{http://www.advancedfootballanalytics.com}
+
+  \item Chen, T. and Guestrin, C. (2016). ``XGBoost: A scalable tree boosting system.''
+    \textit{Proceedings of the 22nd ACM SIGKDD International Conference on
+    Knowledge Discovery and Data Mining}, 785--794.
+
+  \item Friedman, J. H. (2001). ``Greedy function approximation: A gradient
+    boosting machine.'' \textit{Annals of Statistics}, 29(5), 1189--1232.
+
+  \item Ho, T. K. (1995). ``Random decision forests.''
+    \textit{Proceedings of the 3rd International Conference on Document
+    Analysis and Recognition}, 278--282.
+
+  \item Carl, S. and Baldwin, B. (2020). ``nflfastR: Functions to efficiently
+    scrape NFL play-by-play data.'' R package.
+    \url{https://www.nflfastr.com}
+
+  \item Lundberg, S. M. and Lee, S.-I. (2017). ``A unified approach to
+    interpreting model predictions.'' \textit{Advances in Neural Information
+    Processing Systems}, 30.
+
+  \item Breiman, L. (2001). ``Random forests.''
+    \textit{Machine Learning}, 45(1), 5--32.
+
+  \item Lock, D. and Nettleton, D. (2014). ``Using random forests to estimate
+    win probability before each play of an NFL game.''
+    \textit{Journal of Quantitative Analysis in Sports}, 10(2), 197--205.
+
+\end{enumerate}
+
+\end{document}

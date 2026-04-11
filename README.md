@@ -1,168 +1,137 @@
-# NFL Analytics Framework (Research Prototype)
+# NFL Analytics — Gradient Boosting Framework
 
 [![Launch in Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/vasugov/analytics/main?labpath=notebooks%2Flooks%2Fmetrics1.ipynb)
 
-A research-oriented analytics framework for computing advanced football
-metrics from play-by-play data. The system processes historical game
-events and computes metrics such as Expected Points Added (EPA) and Win
-Probability (WP).
+A research framework for computing and modelling advanced NFL metrics from play-by-play data.
+The system uses an R ingestion pipeline (nflfastR) feeding into XGBoost gradient boosting models
+trained on 101,000+ plays across the 2021–2023 regular seasons.
 
-The current version operates on historical datasets using **nflfastR**,
-serving as a prototype for a future real-time analytics pipeline.
+---
 
-------------------------------------------------------------------------
+## What it does
 
-# Project Goal
+| Layer | What happens |
+|---|---|
+| **R pipeline** | Loads nflfastR play-by-play → computes 5 aggregate metrics → exports play-level feature dataset |
+| **Feature engineering** | 27 game-state features: down, distance, field position, score differential, time, situational flags, interaction terms |
+| **XGBoost models** | EPA regression · Play success · Red zone TD probability · Win probability · Drive outcome |
+| **FastAPI** | Serves metrics and live play predictions at `/predict/play` |
+| **Web page** | Static dashboard (`web/nfl.html`) — league rankings, team profiles, feature importance, play predictor |
 
-This project explores how modern analytics infrastructure could be built
-for live football analysis.
+---
 
-The current implementation focuses on:
+## Metrics
 
--   building metric computation pipelines
--   validating statistical models
--   designing scalable system architecture
+- **Expected Points Added (EPA)** — average points contributed per offensive play
+- **Success Rate** — fraction of plays with EPA > 0
+- **Win Probability Added (WPA)** — total WP impact accumulated by each team
+- **Red Zone Efficiency** — TD rate on plays inside the opponent's 20
+- **Drive Efficiency** — scoring rate and average EPA per drive
 
-Future versions aim to support **real-time ingestion and streaming
-analytics during live games**.
+---
 
-------------------------------------------------------------------------
+## Running the full pipeline
 
-# Current Features
+### 1. Install dependencies
+```bash
+bash scripts/install.sh
+```
 
-## Advanced Metric Computation
+### 2. R pipeline — generates all CSVs including play-level ML dataset
+```bash
+Rscript R/pipeline/run_pipeline.R
+```
 
-Using historical play-by-play data, the framework computes:
+### 3. Train gradient boosting models
+```bash
+python3 -m python.training.trainer --model all
+# or train one model: --model epa | success | rz | wp | drive
+```
 
--   **Expected Points Added (EPA)**
--   **Success Rate**
--   **Red Zone Efficiency**
--   **Drive-Level Efficiency**
--   **Win Probability (WP)**
+### 4. Export web data
+```bash
+python3 -m python.export.json_exporter
+```
 
-These metrics are computed across full games or seasons to analyze team
-performance and strategy.
+### 5. Start API
+```bash
+uvicorn python.api.main:app --reload
+```
 
-------------------------------------------------------------------------
+### One-shot (all steps)
+```bash
+bash scripts/run_all.sh
+```
 
-## Historical Data Pipeline
+---
 
-Game data is sourced from:
+## Notebooks
 
--   **nflfastR play-by-play datasets**
+| Notebook | Purpose |
+|---|---|
+| `notebooks/looks/metrics1.ipynb` | Plotly visualizations of all 5 aggregate metrics |
+| `notebooks/models/01_epa_model.ipynb` | Train EPA model, SHAP analysis, team residuals |
+| `notebooks/models/02_wp_model.ipynb` | Win probability model + calibration curve |
+| `notebooks/models/03_team_rankings.ipynb` | Model-derived composite team rankings + JSON export |
 
-The pipeline processes play events sequentially to simulate how a live
-analytics engine would update game state.
+Run in the browser via the Binder badge — no local setup needed.
 
-------------------------------------------------------------------------
+---
 
-## Prototype Analytics Engine
+## Model results (2021–22 train / 2023 validation)
 
-The current engine:
+| Model | Task | Val metric |
+|---|---|---|
+| EPA | Regression | RMSE 1.384, R² 0.010 |
+| Success | Binary classification | AUC 0.614, Brier 0.235 |
+| Red Zone TD | Binary classification | AUC 0.766, Brier 0.132 |
 
--   processes play-by-play events sequentially
--   maintains game state in memory
--   updates metrics after each play
+*Note: play-level EPA is inherently noisy — individual outcomes are nearly unpredictable from game state alone.
+The low R² reflects this variance floor, not model failure. Team-level aggregate predictions are much more stable.*
 
-Although the data is historical, the structure mimics a **real-time
-event-driven system**.
+---
 
-------------------------------------------------------------------------
+## Web deployment
 
-# Planned Features
+Copy `web/nfl.html` and `web/data/` to `vasugov/dinkybeat.github.io`:
 
-Future versions of the framework will include:
+```
+nfl.html
+data/
+  metrics.json
+  prediction_grid.json
+```
 
-## Real-Time Data Ingestion
-
--   live play-by-play streams
--   event queue architecture
--   real-time metric updates
-
-Potential technologies:
-
--   **Apache Kafka**
--   **Redis Streams**
-
-------------------------------------------------------------------------
-
-## Live Analytics Streaming
-
-Metrics will be pushed to dashboards via:
-
--   WebSocket APIs
--   real-time visualization tools
-
-Potential stack:
-
--   **FastAPI**
--   **React**
--   **D3.js**
-
-------------------------------------------------------------------------
-
-## Persistent Storage
-
-For replay and historical analysis:
-
--   **PostgreSQL**
--   **MongoDB**
--   **Cloud Object Storage (S3)**
-
-------------------------------------------------------------------------
-
-# Example Use Cases
-
--   evaluating coaching decisions
--   analyzing personnel packages
--   game strategy optimization
--   research into probabilistic football models
-
-------------------------------------------------------------------------
-
-# Research Focus
-
-This project sits at the intersection of:
-
--   sports analytics
--   distributed systems
--   statistical modeling
--   real-time data processing
-
-------------------------------------------------------------------------
-
-# Usage
-
-## Run in the browser (no setup required)
-
-Click the **Launch in Binder** badge above. Binder will build the environment
-and open the metrics notebook directly in your browser. No installs needed.
-
-Once open, click **Run All** (or Shift+Enter through each cell) to generate
-all charts.
-
-## Run locally
-
-**Requirements:** R, Python 3.x
-
-1. Clone the repo
-
-        git clone https://github.com/vasugov/analytics.git
-        cd analytics
-
-2. Install R packages (one-time)
-
-        Rscript -e "install.packages(c('nflfastR', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
-
-3. Run the R pipeline to generate metric CSVs
-
-        Rscript R/pipeline/run_pipeline.R
-
-4. Install Python dependencies
-
-        pip install -r requirements.txt
-
-5. Open the notebook
-
-        python -m jupyter notebook notebooks/looks/metrics1.ipynb
-
+The page works immediately with inline sample data. Place real `metrics.json` alongside it to show live model outputs.
+
+---
+
+## Project structure
+
+```
+R/
+  ingestion/load_pbp.R          load nflfastR play-by-play
+  metrics/                      compute_epa, compute_success_rate, etc.
+  pipeline/run_pipeline.R       full orchestration
+  utils/helpers.R               filter_regular_season, save_output
+
+python/
+  features/engineering.py       all feature transforms
+  models/                       NFLModel base + 5 XGBoost models
+  training/trainer.py           training orchestration, time-based CV
+  export/json_exporter.py       write web/data/*.json
+  api/main.py                   FastAPI endpoints
+  pipeline/loader.py            read data/outputs CSVs
+
+notebooks/
+  looks/metrics1.ipynb          descriptive charts
+  models/                       training + analysis notebooks
+
+web/
+  nfl.html                      standalone dashboard page
+  data/                         JSON outputs for GitHub Pages
+
+data/outputs/                   committed metric CSVs
+models/reports/                 training metrics + feature importance JSON
+config/settings.yaml            seasons, paths, enabled metrics
+```
