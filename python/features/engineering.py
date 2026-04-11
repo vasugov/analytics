@@ -60,33 +60,27 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     # ── play type binary ─────────────────────────────────────────────────────
     df["play_type_bin"] = (df["play_type"] == "pass").astype(int)
 
-    # ── categorical bins (kept as codes for tree models) ────────────────────
-    df["ydstogo_bucket"] = pd.cut(
-        df["ydstogo"],
-        bins=[0, 3, 6, 10, 20, 100],
-        labels=[0, 1, 2, 3, 4],
-        include_lowest=True,
-    ).astype(int)
+    # ── bucket features — np.digitize avoids pandas Categorical dtype ────────
+    # (pd.cut with labels produces Categorical which XGBoost QuantileDMatrix rejects)
+    df["ydstogo_bucket"] = np.digitize(
+        df["ydstogo"].clip(0, 100).to_numpy(), bins=[4, 7, 11, 21]
+    ).astype(np.int64)
+    # 0=1-3, 1=4-6, 2=7-10, 3=11-20, 4=21+
 
-    df["field_zone"] = pd.cut(
-        df["yardline_100"],
-        bins=[0, 10, 20, 40, 60, 80, 100],
-        labels=[0, 1, 2, 3, 4, 5],
-        include_lowest=True,
-    ).astype(int)
+    df["field_zone"] = np.digitize(
+        df["yardline_100"].clip(0, 100).to_numpy(), bins=[11, 21, 41, 61, 81]
+    ).astype(np.int64)
+    # 0=goal_line, 1=red_zone, 2=scoring, 3=midfield, 4=own, 5=deep_own
 
-    df["score_bucket"] = pd.cut(
-        df["score_differential"],
-        bins=[-100, -21, -14, -7, -3, 3, 7, 14, 21, 100],
-        labels=[0, 1, 2, 3, 4, 5, 6, 7, 8],
-        include_lowest=True,
-    ).astype(int)
+    df["score_bucket"] = np.digitize(
+        df["score_differential"].clip(-100, 100).to_numpy(),
+        bins=[-21, -14, -7, -3, 3, 7, 14, 21],
+    ).astype(np.int64)
 
-    df["quarter_bucket"] = pd.cut(
-        df["game_seconds_remaining"],
-        bins=[-1, 900, 1800, 2700, 3600],
-        labels=[4, 3, 2, 1],
-    ).astype(int)
+    df["quarter_bucket"] = np.digitize(
+        df["game_seconds_remaining"].clip(0, 3600).to_numpy(), bins=[901, 1801, 2701]
+    ).astype(np.int64)
+    # 0=4th quarter, 1=3rd, 2=2nd, 3=1st
 
     return df
 
@@ -99,7 +93,7 @@ def get_feature_cols() -> list[str]:
         "score_bucket",
         "quarter_bucket",
         "score_x_time",
-        "yardline_x_down",
+        # note: yardline_x_down already in BASE_FEATURES — do not add again
     ]
 
 

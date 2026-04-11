@@ -1,0 +1,75 @@
+{
+  "train": {
+    "auc": 0.6423,
+    "brier": 0.2314,
+    "logloss": 0.6544
+  },
+  "val": {
+    "auc": 0.614,
+    "brier": 0.2345,
+    "logloss": 0.6612
+  },
+  "elapsed_s": 0.5,
+  "feature_importance": [
+    {
+      "feature": "ydstogo_clipped",
+      "importance": 0.14584881067276
+    },
+    {
+      "feature": "ydstogo_bucket",
+      "importance": 0.10658560693264008
+    },
+    {
+      "feature": "is_red_zone",
+      "importance": 0.0957067608833313
+    },
+    {
+      "feature": "down_x_ydstogo",
+      "importance": 0.07421160489320755
+    },
+    {
+      "feature": "play_type_bin",
+      "importance": 0.06672846525907516
+    },
+    {
+      "feature": "ydstogo",
+      "importance": 0.0663847029209137
+    },
+    {
+      "feature": "down",
+      "importance": 0.05753237381577492
+    },
+    {
+      "feature": "shotgun_flag",
+      "importance": 0.03134525567293167
+    },
+    {
+      "feature": "no_huddle_flag",
+      "importance": 0.026524100452661514
+    },
+    {
+      "feature": "is_goal_to_go",
+      "importance": 0.024559924378991127
+    },
+    {
+      "feature": "field_position_norm",
+      "importance": 0.024062713608145714
+    },
+    {
+      "feature": "yardline_100",
+      "importance": 0.021119527518749237
+    },
+    {
+      "feature": "is_two_minute",
+      "importance": 0.02062401920557022
+    },
+    {
+      "feature": "game_seconds_remaining",
+      "importance": 0.020531892776489258
+    },
+    {
+      "feature": "defteam_timeouts_remaining",
+      "importance": 0.020325779914855957
+    }
+  ]
+}

@@ -38,6 +38,11 @@ compute_features <- function(pbp) {
     dplyr::select(
       #identifiers
       game_id, play_id, season, week, posteam, defteam,
+      #drive identifiers (needed for drive outcome model)
+      drive,
+      dplyr::any_of("fixed_drive_result"),
+      #win outcome (needed for win probability model)
+      dplyr::any_of(c("result", "posteam_score_post", "defteam_score_post")),
       #core game-state features (model inputs)
       down, ydstogo, yardline_100,
       score_differential,

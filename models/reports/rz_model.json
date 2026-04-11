@@ -1,0 +1,63 @@
+{
+  "train": {
+    "auc": 0.7818,
+    "brier": 0.1314,
+    "logloss": 0.4153
+  },
+  "val": {
+    "auc": 0.7658,
+    "brier": 0.1315,
+    "logloss": 0.417
+  },
+  "elapsed_s": 0.1,
+  "feature_importance": [
+    {
+      "feature": "field_position_norm",
+      "importance": 0.29737943410873413
+    },
+    {
+      "feature": "yardline_100",
+      "importance": 0.26353269815444946
+    },
+    {
+      "feature": "play_type_bin",
+      "importance": 0.08888842165470123
+    },
+    {
+      "feature": "ydstogo",
+      "importance": 0.05318959429860115
+    },
+    {
+      "feature": "down_x_ydstogo",
+      "importance": 0.03654642030596733
+    },
+    {
+      "feature": "shotgun_flag",
+      "importance": 0.03231952711939812
+    },
+    {
+      "feature": "down",
+      "importance": 0.02636270970106125
+    },
+    {
+      "feature": "half_seconds_remaining",
+      "importance": 0.024184459820389748
+    },
+    {
+      "feature": "is_goal_to_go",
+      "importance": 0.022610874846577644
+    },
+    {
+      "feature": "game_seconds_remaining",
+      "importance": 0.02203880250453949
+    },
+    {
+      "feature": "defteam_timeouts_remaining",
+      "importance": 0.021465342491865158
+    },
+    {
+      "feature": "score_differential",
+      "importance": 0.021325472742319107
+    }
+  ]
+}

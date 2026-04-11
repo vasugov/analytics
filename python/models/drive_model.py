@@ -60,7 +60,6 @@ class DriveModel(NFLModel):
             objective="multi:softprob",
             num_class=len(DRIVE_CLASSES),
             eval_metric="mlogloss",
-            use_label_encoder=False,
             random_state=seed,
             n_jobs=-1,
             tree_method="hist",
@@ -73,11 +72,13 @@ class DriveModel(NFLModel):
         return {cls: proba[:, i] for i, cls in enumerate(DRIVE_CLASSES)}
 
     def fit_with_eval(self, X_train, y_train, X_val, y_val):
-        self.feature_cols = list(X_train.columns)
+        if hasattr(X_train, "columns"):
+            self.feature_cols = list(X_train.columns)
+        X_tr, X_v = self._np(X_train), self._np(X_val)
         self.model.set_params(early_stopping_rounds=40)
         self.model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)],
+            X_tr, self._np(y_train),
+            eval_set=[(X_v, self._np(y_val))],
             verbose=50,
         )
         self.is_fitted = True

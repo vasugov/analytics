@@ -50,11 +50,14 @@ class EPAModel(NFLModel):
 
     def fit_with_eval(self, X_train, y_train, X_val, y_val):
         """Fit with early stopping on the validation set."""
-        self.feature_cols = list(X_train.columns)
+        if hasattr(X_train, "columns"):
+            self.feature_cols = list(X_train.columns)
+        X_tr = self._np(X_train)
+        X_v  = self._np(X_val)
         self.model.set_params(early_stopping_rounds=50)
         self.model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)],
+            X_tr, self._np(y_train),
+            eval_set=[(X_v, self._np(y_val))],
             verbose=100,
         )
         self.is_fitted = True

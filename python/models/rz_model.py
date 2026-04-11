@@ -53,7 +53,6 @@ class RZModel(NFLModel):
             min_child_weight=min_child_weight,
             objective="binary:logistic",
             eval_metric="auc",
-            use_label_encoder=False,
             random_state=seed,
             n_jobs=-1,
             tree_method="hist",
@@ -61,11 +60,13 @@ class RZModel(NFLModel):
         self.feature_cols = RZ_FEATURES
 
     def fit_with_eval(self, X_train, y_train, X_val, y_val):
-        self.feature_cols = list(X_train.columns)
+        if hasattr(X_train, "columns"):
+            self.feature_cols = list(X_train.columns)
+        X_tr, X_v = self._np(X_train), self._np(X_val)
         self.model.set_params(early_stopping_rounds=30)
         self.model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)],
+            X_tr, self._np(y_train),
+            eval_set=[(X_v, self._np(y_val))],
             verbose=50,
         )
         self.is_fitted = True

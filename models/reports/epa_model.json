@@ -1,0 +1,95 @@
+{
+  "train": {
+    "rmse": 1.3514,
+    "mae": 0.937,
+    "r2": 0.035
+  },
+  "val": {
+    "rmse": 1.3836,
+    "mae": 0.955,
+    "r2": 0.0095
+  },
+  "elapsed_s": 0.3,
+  "feature_importance": [
+    {
+      "feature": "field_zone",
+      "importance": 0.0654376894235611
+    },
+    {
+      "feature": "down",
+      "importance": 0.06109745055437088
+    },
+    {
+      "feature": "play_type_bin",
+      "importance": 0.050660476088523865
+    },
+    {
+      "feature": "down_x_ydstogo",
+      "importance": 0.04574969783425331
+    },
+    {
+      "feature": "is_goal_to_go",
+      "importance": 0.04416905716061592
+    },
+    {
+      "feature": "quarter_bucket",
+      "importance": 0.04158465936779976
+    },
+    {
+      "feature": "yardline_100",
+      "importance": 0.04073942080140114
+    },
+    {
+      "feature": "ydstogo",
+      "importance": 0.039413999766111374
+    },
+    {
+      "feature": "game_seconds_remaining",
+      "importance": 0.03874770179390907
+    },
+    {
+      "feature": "half_seconds_remaining",
+      "importance": 0.03873540088534355
+    },
+    {
+      "feature": "score_x_time",
+      "importance": 0.03810746967792511
+    },
+    {
+      "feature": "score_abs",
+      "importance": 0.03748337924480438
+    },
+    {
+      "feature": "time_pressure",
+      "importance": 0.03606763109564781
+    },
+    {
+      "feature": "posteam_timeouts_remaining",
+      "importance": 0.03572894260287285
+    },
+    {
+      "feature": "yardline_x_down",
+      "importance": 0.035372067242860794
+    },
+    {
+      "feature": "shotgun_flag",
+      "importance": 0.03518233075737953
+    },
+    {
+      "feature": "ydstogo_clipped",
+      "importance": 0.03477907553315163
+    },
+    {
+      "feature": "no_huddle_flag",
+      "importance": 0.03437868878245354
+    },
+    {
+      "feature": "is_two_minute",
+      "importance": 0.03389909490942955
+    },
+    {
+      "feature": "score_bucket",
+      "importance": 0.033472295850515366
+    }
+  ]
+}

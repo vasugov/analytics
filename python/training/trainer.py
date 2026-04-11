@@ -54,8 +54,10 @@ def train_epa(df: pd.DataFrame) -> EPAModel:
     feat  = get_feature_cols()
     feat  = [c for c in feat if c in df_f.columns]
     train, val = time_split(df_f)
-    X_tr, y_tr = train[feat], train["epa"]
-    X_v,  y_v  = val[feat],   val["epa"]
+    X_tr = train[feat].astype(float)
+    X_v  = val[feat].astype(float)
+    y_tr = train["epa"]
+    y_v  = val["epa"]
 
     model = EPAModel()
     t0 = time.time()
@@ -120,8 +122,10 @@ def train_success(df: pd.DataFrame) -> SuccessModel:
     feat  = get_feature_cols()
     feat  = [c for c in feat if c in df_f.columns]
     train, val = time_split(df_f)
-    X_tr, y_tr = train[feat], train["success"]
-    X_v,  y_v  = val[feat],   val["success"]
+    X_tr = train[feat].astype(float)
+    X_v  = val[feat].astype(float)
+    y_tr = train["success"]
+    y_v  = val["success"]
 
     model = SuccessModel()
     t0 = time.time()
@@ -149,8 +153,10 @@ def train_rz(df: pd.DataFrame) -> RZModel:
     print(f"  {len(rz):,} red zone plays")
     feat  = [c for c in RZ_FEATURES if c in rz.columns]
     train, val = time_split(rz)
-    X_tr, y_tr = train[feat], train["is_td_play"]
-    X_v,  y_v  = val[feat],   val["is_td_play"]
+    X_tr = train[feat].astype(float)
+    X_v  = val[feat].astype(float)
+    y_tr = train["is_td_play"]
+    y_v  = val["is_td_play"]
 
     model = RZModel()
     t0 = time.time()
@@ -175,6 +181,12 @@ def train_rz(df: pd.DataFrame) -> RZModel:
 def train_drive(df: pd.DataFrame) -> DriveModel:
     print("\n[drive outcome model]")
     df_f = add_features(df)
+
+    if "drive" not in df_f.columns or "fixed_drive_result" not in df_f.columns:
+        print("  warning: drive/fixed_drive_result columns not in play_features — "
+              "re-run Rscript R/pipeline/run_pipeline.R to include them, then retrain")
+        return None
+
     #use first play of each drive as the predictor state
     drive_starts = (
         df_f.sort_values(["game_id", "play_id"])
@@ -195,8 +207,10 @@ def train_drive(df: pd.DataFrame) -> DriveModel:
     drive_starts["drive_label"] = drive_starts["fixed_drive_result"].map(label_map).fillna(4).astype(int)
     feat  = [c for c in DRIVE_FEATURES if c in drive_starts.columns]
     train, val = time_split(drive_starts)
-    X_tr, y_tr = train[feat], train["drive_label"]
-    X_v,  y_v  = val[feat],   val["drive_label"]
+    X_tr = train[feat].astype(float)
+    X_v  = val[feat].astype(float)
+    y_tr = train["drive_label"]
+    y_v  = val["drive_label"]
 
     model = DriveModel()
     t0 = time.time()

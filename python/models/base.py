@@ -34,6 +34,12 @@ class NFLModel:
         self.feature_cols: list[str] = []
         self.is_fitted: bool = False
 
+    # ── numpy coercion (xgboost 3.x + pandas 1.x compatibility) ─────────────
+    @staticmethod
+    def _np(X):
+        """Convert DataFrame/Series to numpy array; pass numpy arrays through."""
+        return X.to_numpy() if hasattr(X, "to_numpy") else X
+
     # ── training ──────────────────────────────────────────────────────────────
     def fit(self, X_train: pd.DataFrame, y_train: pd.Series, **kwargs) -> "NFLModel":
         self.feature_cols = list(X_train.columns)
@@ -44,14 +50,18 @@ class NFLModel:
     # ── inference ─────────────────────────────────────────────────────────────
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         self._check_fitted()
-        return self.model.predict(X[self.feature_cols])
+        if hasattr(X, "columns"):
+            X = X[self.feature_cols].to_numpy()
+        return self.model.predict(X)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """Only valid for classification tasks."""
         self._check_fitted()
+        if hasattr(X, "columns"):
+            X = X[self.feature_cols].to_numpy()
         if self.task == "binary":
-            return self.model.predict_proba(X[self.feature_cols])[:, 1]
-        return self.model.predict_proba(X[self.feature_cols])
+            return self.model.predict_proba(X)[:, 1]
+        return self.model.predict_proba(X)
 
     # ── evaluation ────────────────────────────────────────────────────────────
     def evaluate(self, X: pd.DataFrame, y: pd.Series) -> dict:
