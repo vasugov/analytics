@@ -1,2 +1,22 @@
 pandas
+numpy
 plotly
+scipy
+matplotlib
+seaborn
+
+# ml
+xgboost
+lightgbm
+scikit-learn
+shap
+optuna
+joblib
+
+# api
+fastapi
+uvicorn[standard]
+pyyaml
+
+# notebooks
+ipykernel
