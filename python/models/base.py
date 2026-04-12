@@ -20,11 +20,9 @@ MODELS_DIR = Path(__file__).resolve().parents[2] / "models" / "saved"
 
 
 class NFLModel:
-    """
-    Abstract base for all gradient-boosting NFL models.
-    Subclasses set self.model and self.task in __init__.
-    task: 'regression' | 'binary' | 'multiclass'
-    """
+    #abstract base for all gradient-boosting nfl models
+    #subclasses set self.model and self.task in __init__
+    #task: 'regression' | 'binary' | 'multiclass'
 
     name: str = "base"
     task: str = "regression"
@@ -34,20 +32,17 @@ class NFLModel:
         self.feature_cols: list[str] = []
         self.is_fitted: bool = False
 
-    # ── numpy coercion (xgboost 3.x + pandas 1.x compatibility) ─────────────
     @staticmethod
     def _np(X):
-        """Convert DataFrame/Series to numpy array; pass numpy arrays through."""
+        #coerce dataframe/series to numpy; pass arrays through (xgboost 3.x + pandas 1.x compat)
         return X.to_numpy() if hasattr(X, "to_numpy") else X
 
-    # ── training ──────────────────────────────────────────────────────────────
     def fit(self, X_train: pd.DataFrame, y_train: pd.Series, **kwargs) -> "NFLModel":
         self.feature_cols = list(X_train.columns)
         self.model.fit(X_train, y_train, **kwargs)
         self.is_fitted = True
         return self
 
-    # ── inference ─────────────────────────────────────────────────────────────
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         self._check_fitted()
         if hasattr(X, "columns"):
@@ -55,7 +50,7 @@ class NFLModel:
         return self.model.predict(X)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        """Only valid for classification tasks."""
+        #only valid for classification tasks
         self._check_fitted()
         if hasattr(X, "columns"):
             X = X[self.feature_cols].to_numpy()
@@ -63,7 +58,6 @@ class NFLModel:
             return self.model.predict_proba(X)[:, 1]
         return self.model.predict_proba(X)
 
-    # ── evaluation ────────────────────────────────────────────────────────────
     def evaluate(self, X: pd.DataFrame, y: pd.Series) -> dict:
         preds = self.predict(X)
         if self.task == "regression":
@@ -82,7 +76,6 @@ class NFLModel:
             }
         return {"accuracy": round((preds == y).mean(), 4)}
 
-    # ── persistence ───────────────────────────────────────────────────────────
     def save(self, path: Path | None = None) -> Path:
         self._check_fitted()
         MODELS_DIR.mkdir(parents=True, exist_ok=True)

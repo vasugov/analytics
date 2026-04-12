@@ -10,12 +10,6 @@ from python.features.engineering import get_feature_cols
 
 
 class SuccessModel(NFLModel):
-    """
-    Binary classifier: was this play successful (EPA > 0)?
-    Complements the EPA regressor — gives a probability estimate
-    rather than a point prediction, useful for situational analysis.
-    """
-
     name = "success_model"
     task = "binary"
 

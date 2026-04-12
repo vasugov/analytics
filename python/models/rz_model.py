@@ -25,10 +25,7 @@ RZ_FEATURES = [
 
 
 class RZModel(NFLModel):
-    """
-    Predicts p(touchdown) on plays inside the opponent's 20-yard line.
-    Filter input data to yardline_100 <= 20 before fitting.
-    """
+    #filter input data to yardline_100 <= 20 before fitting
 
     name = "rz_model"
     task = "binary"

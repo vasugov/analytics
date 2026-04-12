@@ -46,7 +46,7 @@ def _save_report(name: str, metrics: dict) -> None:
     print(f"  report saved → {path}")
 
 
-# ── individual trainers ───────────────────────────────────────────────────────
+#individual trainers
 
 def train_epa(df: pd.DataFrame) -> EPAModel:
     print("\n[epa model]")
@@ -232,18 +232,15 @@ def train_drive(df: pd.DataFrame) -> DriveModel:
     return model
 
 
-# ── prediction grid export ────────────────────────────────────────────────────
+#prediction grid export
 
 def export_prediction_grid(epa_model: EPAModel, success_model: SuccessModel) -> None:
-    """
-    Export a (down × ydstogo × yardline × score_diff) prediction grid as JSON
-    for the static web page. Models must already be fitted.
-    """
+    #exports (down x ydstogo x yardline x score_diff) prediction grid as json for web page
     from python.export.json_exporter import export_prediction_grid as _export
     _export(epa_model, success_model)
 
 
-# ── main ─────────────────────────────────────────────────────────────────────
+#main
 
 def train_all() -> None:
     df = load_play_features()

@@ -22,7 +22,7 @@ REPORTS_DIR = Path(__file__).resolve().parents[2] / "models" / "reports"
 
 app = FastAPI(title="NFL Analytics API", version="1.0.0")
 
-#allow the github pages frontend to call this api
+#allow github pages frontend to call this api
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 
-# ── lazy-loaded model cache ───────────────────────────────────────────────────
+#lazy-loaded model cache
 
 _models: dict = {}
 
@@ -45,7 +45,7 @@ def _get_model(name: str):
     return _models[name]
 
 
-# ── request/response schemas ─────────────────────────────────────────────────
+#request/response schemas
 
 class PlayState(BaseModel):
     down: int               = Field(..., ge=1, le=4)
@@ -66,14 +66,14 @@ class PlayPrediction(BaseModel):
     model_available: bool
 
 
-# ── health ────────────────────────────────────────────────────────────────────
+#health
 
 @app.get("/health")
 def health():
     return {"status": "ok", "models_dir": str(MODELS_DIR)}
 
 
-# ── metrics endpoints ─────────────────────────────────────────────────────────
+#metrics endpoints
 
 @app.get("/metrics/{metric}")
 def get_metric(metric: str, season: Optional[int] = None, team: Optional[str] = None):
@@ -106,7 +106,7 @@ def team_profile(team: str, season: Optional[int] = None):
     return result
 
 
-# ── model prediction endpoints ────────────────────────────────────────────────
+#model prediction endpoints
 
 @app.post("/predict/play", response_model=PlayPrediction)
 def predict_play(state: PlayState):

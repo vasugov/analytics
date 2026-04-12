@@ -25,14 +25,10 @@ DRIVE_CLASSES = ["touchdown", "field_goal", "punt", "turnover", "other"]
 
 
 class DriveModel(NFLModel):
-    """
-    Multi-class classifier for drive outcome prediction.
-    Input: features of the first play (or drive-start state) of a drive.
-    Output: probability distribution over DRIVE_CLASSES.
-
-    To prepare data: group by (game_id, drive), take the first row per drive,
-    and map fixed_drive_result to integer class labels using DRIVE_CLASSES.
-    """
+    #input: first-play features of each drive
+    #output: probability dist over DRIVE_CLASSES
+    #prep: group by (game_id, drive), take first row per drive,
+    #      map fixed_drive_result to int labels using DRIVE_CLASSES
 
     name = "drive_model"
     task = "multiclass"
@@ -67,7 +63,7 @@ class DriveModel(NFLModel):
         self.feature_cols = DRIVE_FEATURES
 
     def predict_proba_named(self, X) -> dict[str, np.ndarray]:
-        """Returns dict of class_name -> probability array."""
+        #returns dict of class_name -> probability array
         proba = self.model.predict_proba(X[self.feature_cols])
         return {cls: proba[:, i] for i, cls in enumerate(DRIVE_CLASSES)}
 

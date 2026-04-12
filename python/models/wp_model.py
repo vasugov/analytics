@@ -8,7 +8,7 @@ import xgboost as xgb
 from .base import NFLModel
 
 
-# win probability uses additional score-context features beyond base epa features
+#win probability uses additional score-context features beyond base epa features
 WP_FEATURES = [
     "down", "ydstogo", "yardline_100",
     "score_differential",
@@ -23,12 +23,8 @@ WP_FEATURES = [
 
 
 class WPModel(NFLModel):
-    """
-    Predicts win probability (0-1) for the possession team at any game state.
-    The target column must be 'posteam_won' (1 if posteam won the game, else 0).
-    Calibration note: tree models are typically well-calibrated for this task;
-    use CalibratedClassifierCV if brier score > 0.20 on the validation set.
-    """
+    #target col must be 'posteam_won' (1 if posteam won, else 0)
+    #use CalibratedClassifierCV if brier > 0.20 on val set
 
     name = "wp_model"
     task = "binary"

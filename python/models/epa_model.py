@@ -10,12 +10,6 @@ from python.features.engineering import get_feature_cols
 
 
 class EPAModel(NFLModel):
-    """
-    Predicts EPA (continuous) given game-state features.
-    This is the core metric model — all other derived rankings use residuals
-    from this model to measure over/under-performance vs. expectation.
-    """
-
     name = "epa_model"
     task = "regression"
 
@@ -49,7 +43,7 @@ class EPAModel(NFLModel):
         self.feature_cols = get_feature_cols()
 
     def fit_with_eval(self, X_train, y_train, X_val, y_val):
-        """Fit with early stopping on the validation set."""
+        #early stopping on validation set
         if hasattr(X_train, "columns"):
             self.feature_cols = list(X_train.columns)
         X_tr = self._np(X_train)

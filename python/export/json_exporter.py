@@ -40,10 +40,8 @@ def build_composite_rankings(
     rz: pd.DataFrame,
     drive: pd.DataFrame,
 ) -> list[dict]:
-    """
-    Merge all metrics into one table, rank each column, compute composite score.
-    Lower composite = better (average of ranks).
-    """
+    #merges all metrics, ranks each col, computes composite score
+    #lower composite = better (average of per-metric ranks)
     merged = (
         epa[["season", "posteam", "epa_per_play"]]
         .merge(sr[["season", "posteam", "success_rate"]], on=["season", "posteam"], how="inner")
@@ -115,10 +113,8 @@ def export_metrics_json() -> Path:
 
 
 def export_prediction_grid(epa_model=None, success_model=None) -> Path:
-    """
-    Export a prediction grid for use by the static web page predictor.
-    If models aren't provided, load from disk.
-    """
+    #exports prediction grid for static web page predictor
+    #loads models from disk if not provided
     from python.models.epa_model import EPAModel
     from python.models.success_model import SuccessModel
     from python.features.engineering import add_features
@@ -136,7 +132,7 @@ def export_prediction_grid(epa_model=None, success_model=None) -> Path:
     rows = []
     for d in downs:
         for yt in ydstogos:
-            if yt > (d == 1 and 10 or 99):  # skip impossible states
+            if yt > (d == 1 and 10 or 99):  #skip impossible states
                 continue
             for yl in yardlines:
                 for sd in score_diffs:
