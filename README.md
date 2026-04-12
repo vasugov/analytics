@@ -2,7 +2,7 @@
 
 NFL play-by-play analytics using nflfastR and XGBoost. Computes advanced metrics from 2021-2023 seasons and trains gradient boosting models on play-level features.
 
-[![Launch in Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/vasugov/analytics/main?labpath=notebooks%2Flooks%2Fmetrics1.ipynb)
+[![Try it out at govardha.net](https://govardha.net/olave)
 
 ## metrics
 
