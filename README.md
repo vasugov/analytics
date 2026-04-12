@@ -1,10 +1,11 @@
-# NFL Analytics
+# OLAVE-NFl
+## Operational Longitudinal Analytics Validation Engine for the NFL
 
 NFL play-by-play analytics using nflfastR and XGBoost. Computes advanced metrics from 2021-2023 seasons and trains gradient boosting models on play-level features.
 
 [Try it out at govardha.net](https://govardha.net/olave)
 
-## metrics
+## Metrics
 
 - EPA (expected points added per play)
 - success rate (fraction of plays with EPA > 0)
@@ -12,7 +13,7 @@ NFL play-by-play analytics using nflfastR and XGBoost. Computes advanced metrics
 - red zone efficiency (TD rate inside opp 20)
 - drive efficiency (scoring rate + avg EPA per drive)
 
-## how to run
+## Run it:
 
 ```bash
 bash scripts/install.sh
@@ -22,9 +23,7 @@ python3 -m python.export.json_exporter
 uvicorn python.api.main:app --reload
 ```
 
-or all at once: `bash scripts/run_all.sh`
-
-## models
+## Models
 
 trained on 2021-22, validated on 2023
 
@@ -36,24 +35,4 @@ trained on 2021-22, validated on 2023
 | win probability | binary classifier |
 | drive outcome | multiclass classifier |
 
-## notebooks
 
-- `notebooks/looks/metrics1.ipynb` - metric visualizations
-- `notebooks/models/01_epa_model.ipynb` - EPA model + SHAP
-- `notebooks/models/02_wp_model.ipynb` - win probability + calibration
-- `notebooks/models/03_team_rankings.ipynb` - composite rankings
-
-## web
-
-copy `web/nfl.html` and `web/data/` to your GitHub Pages repo. works with inline sample data out of the box.
-
-## structure
-
-```
-R/          data ingestion and metric computation
-python/     models, training, api, export
-notebooks/  analysis
-web/        static dashboard
-data/       pipeline outputs
-models/     saved models and reports
-```
