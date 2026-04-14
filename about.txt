@@ -1,5 +1,0 @@
-NFL analytics project using nflfastR play-by-play data.
-
-Computes EPA, success rate, WPA, red zone efficiency, and drive efficiency.
-Trains XGBoost models on 101k+ plays from 2021-2023 regular seasons.
-Includes a FastAPI server and static web dashboard.
